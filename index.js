@@ -90,34 +90,21 @@ app.post('/:db/_bulk_docs', async (req, res) => {
   const response = []
 
   // process each document
-  for (const i in docs) {
-    const doc = docs[i]
-    let id
-
-    // if this is a deletion
-    if (doc._deleted) {
-      id = doc._id || null
-      if (!id || !utils.validID(id)) {
-        response.push({ ok: false, error: 'missing or invalid _id' })
-        continue
+  let sql = docutils.prepareInsertSQL(databaseName)
+  const insertStmt = client.prepare(sql)
+  sql = docutils.prepareDeleteSQL(databaseName)
+  const deleteStmt = client.prepare(sql)
+  const bulker = client.transaction((docs) => {
+    for (const doc in docs) {
+      const id = docs._id ? docs._id : kuuid.id()
+      if (doc._deleted) {
+        deleteStmt.run(id)
+      } else {
+        insertStmt.run({ json: JSON.stringify(doc), id: id })
       }
-      const sql = docutils.prepareDeleteSQL(databaseName)
-      const stmt = client.prepare(sql)
-      await stmt.run(id)
-      response.push({ ok: true, id: id, rev: fixrev })
-    } else {
-      // update or insert
-      id = doc._id || kuuid.id()
-      if (!utils.validID(id)) {
-        response.push({ ok: false, id: id, error: 'invalid _id' })
-        continue
-      }
-      const sql = docutils.prepareInsertSQL(databaseName)
-      const stmt = client.prepare(sql)
-      await stmt.run({ json: JSON.stringify(doc), id: id })
-      response.push({ ok: true, id: id, rev: fixrev })
     }
-  }
+  })
+  await bulker(docs)
 
   // end transaction
   res.status(201).send(response)
