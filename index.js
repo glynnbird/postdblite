@@ -10,6 +10,7 @@ const app = express()
 const basicAuth = require('express-basic-auth')
 const kuuid = require('kuuid')
 const morgan = require('morgan')
+let counter = 1
 
 // fixed rev value - no MVCC here
 const fixrev = '0-1'
@@ -63,7 +64,7 @@ const writeDoc = async (databaseName, id, doc) => {
   const sql = docutils.prepareInsertSQL(databaseName)
   debug(sql, id, doc)
   const stmt = client.prepare(sql)
-  return stmt.run({ json: JSON.stringify(doc), id: id })
+  return stmt.run({ json: JSON.stringify(doc), id: id, seq: kuuid.prefixms() + counter++ })
 }
 
 // POST /_session
@@ -98,9 +99,9 @@ app.post('/:db/_bulk_docs', async (req, res) => {
     for (const doc in docs) {
       const id = docs._id ? docs._id : kuuid.id()
       if (doc._deleted) {
-        deleteStmt.run(id)
+        deleteStmt.run({ id: id, seq: kuuid.prefixms() + counter++ })
       } else {
-        insertStmt.run({ json: JSON.stringify(doc), id: id })
+        insertStmt.run({ json: JSON.stringify(doc), id: id, seq: kuuid.prefixms() + counter++ })
       }
     }
   })
@@ -321,7 +322,7 @@ app.delete('/:db/:id', readOnlyMiddleware, async (req, res) => {
     const sql = docutils.prepareDeleteSQL(databaseName)
     const stmt = client.prepare(sql)
     debug(sql, id)
-    await stmt.run(id)
+    await stmt.run({ id: id, seq: kuuid.prefixms() + counter++ })
     res.send({ ok: true, id: id, rev: fixrev })
   } catch (e) {
     debug(e)

@@ -182,11 +182,11 @@ PostDB is a simple Express Node.js app that talks to a SQLite database. Each Pos
 -----------+------------------------+-----------+----------+---------
  id        | text                   |           | not null | 
  json      | text                   |           | not null | 
- seq       | integer                |           |          | 
+ seq       | text                   |           | not null | 
  deleted   | boolean                |           | not null | 
 ```
 
 - `id` - the document's unique identifier. Becomes the document's `_id` field.
 - `json` - the document's body except the `_id` and `_rev` fields.
-- `seq` - the sequence number. Each insert, update or delete to the database will set `seq` to one greater than the maximum `seq` in the database.
+- `seq` - the sequence number. Each insert, update or delete to the database will set `seq` to a value greater than other values of `seq` in the database.
 - `deleted` - when a document is deleted, the row remains but the `deleted` flag is set, the `seq` is updated, the `json` field is wiped out and the index fields are cleared.
