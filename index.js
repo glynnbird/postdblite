@@ -96,7 +96,8 @@ app.post('/:db/_bulk_docs', async (req, res) => {
   sql = docutils.prepareDeleteSQL(databaseName)
   const deleteStmt = client.prepare(sql)
   const bulker = client.transaction((docs) => {
-    for (const doc in docs) {
+    for (const i in docs) {
+      const doc = docs[i]
       const id = docs._id ? docs._id : kuuid.id()
       if (doc._deleted) {
         deleteStmt.run({ id: id, seq: kuuid.prefixms() + counter++ })
