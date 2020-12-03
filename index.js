@@ -141,7 +141,10 @@ app.post('/:db/_bulk_docs', async (req, res) => {
   const bulker = client.transaction((docs) => {
     for (const i in docs) {
       const doc = docs[i]
+      delete doc._revisions
       const id = doc._id ? doc._id : kuuid.id()
+      delete doc._id
+      delete doc._rev
       if (doc._deleted) {
         deleteStmt.run({ id: id, seq: kuuid.prefixms() + counter++ })
       } else {
