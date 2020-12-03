@@ -55,7 +55,11 @@ const client = new Database('post.db', { verbose: debug })
 
 // send error
 const sendError = (res, statusCode, str) => {
-  res.status(statusCode).send({ error: str })
+  let error = 'error'
+  switch (statusCode) {
+    case 404: error = 'not_found'; str = 'missing'; break
+  }
+  res.status(statusCode).send({ error: error, reason: str })
 }
 
 // write a document to the database
@@ -71,6 +75,45 @@ const writeDoc = async (databaseName, id, doc) => {
 // session endpoint
 app.post('/_session', async (req, res) => {
   res.send({ ok: true, name: 'admin', roles: ['admin'] })
+})
+
+// POST /db/_revs_diff
+// checks if we have doc revisions
+app.post('/:db/_revs_diff', async (req, res) => {
+  const databaseName = req.params.db
+  if (!utils.validDatabaseName(databaseName)) {
+    return sendError(res, 400, 'Invalid database name')
+  }
+
+  // simulate response asking for only the most recent revision
+  const response = {}
+  for (const id in req.body) {
+    const revs = req.body[id].sort()
+    response[id] = {
+      missing: [revs[revs.length - 1]]
+    }
+  }
+
+  // send response
+  res.status(200).send(response)
+})
+
+// POST /db/_ensure_full_commit
+// checks if we have doc revisions
+app.post('/:db/_ensure_full_commit', async (req, res) => {
+  const databaseName = req.params.db
+  if (!utils.validDatabaseName(databaseName)) {
+    return sendError(res, 400, 'Invalid database name')
+  }
+
+  // simulate response asking for only the most recent revision
+  const response = {
+    instance_start_time: '0',
+    ok: true
+  }
+
+  // send response
+  res.status(201).send(response)
 })
 
 // POST /db/_bulk_docs
@@ -98,7 +141,7 @@ app.post('/:db/_bulk_docs', async (req, res) => {
   const bulker = client.transaction((docs) => {
     for (const i in docs) {
       const doc = docs[i]
-      const id = docs._id ? docs._id : kuuid.id()
+      const id = doc._id ? doc._id : kuuid.id()
       if (doc._deleted) {
         deleteStmt.run({ id: id, seq: kuuid.prefixms() + counter++ })
       } else {
@@ -258,6 +301,33 @@ app.get('/:db/_all_docs', async (req, res) => {
   }
 })
 
+// GET /db/_local/doc
+// get a doc with a known id
+app.get('/:db/_local/:id', async (req, res) => {
+  const databaseName = req.params.db
+  if (!utils.validDatabaseName(databaseName)) {
+    return sendError(res, 400, 'Invalid database name')
+  }
+  let id = req.params.id
+  if (!utils.validID(id)) {
+    return sendError(res, 400, 'Invalid id')
+  }
+  id = '_local/' + id
+  try {
+    const sql = docutils.prepareGetSQL(databaseName)
+    debug(sql)
+    const stmt = client.prepare(sql)
+    const data = await stmt.get(id)
+    if (!data) {
+      throw (new Error('missing document'))
+    }
+    const doc = docutils.processResultDoc(data)
+    res.send(doc)
+  } catch (e) {
+    sendError(res, 404, 'Document not found ' + id)
+  }
+})
+
 // GET /db/doc
 // get a doc with a known id
 app.get('/:db/:id', async (req, res) => {
@@ -281,6 +351,31 @@ app.get('/:db/:id', async (req, res) => {
     res.send(doc)
   } catch (e) {
     sendError(res, 404, 'Document not found ' + id)
+  }
+})
+
+// PUT /db/_local/doc
+// add a doc with a known id
+app.put('/:db/_local/:id', readOnlyMiddleware, async (req, res) => {
+  const databaseName = req.params.db
+  if (!utils.validDatabaseName(databaseName)) {
+    return sendError(res, 400, 'Invalid database name')
+  }
+  let id = req.params.id
+  if (!utils.validID(id)) {
+    return sendError(res, 400, 'Invalid id')
+  }
+  id = '_local/' + id
+  const doc = req.body
+  if (!doc || typeof doc !== 'object') {
+    return sendError(res, 400, 'Invalid JSON')
+  }
+  try {
+    await writeDoc(databaseName, id, doc)
+    res.status(201).send({ ok: true, id: id, rev: fixrev })
+  } catch (e) {
+    debug(e)
+    sendError(res, 404, 'Could not write document ' + id)
   }
 })
 
@@ -403,7 +498,29 @@ app.get('/:db', async (req, res) => {
     sql = tableutils.prepareTableDeletedRowCountSQL(databaseName)
     stmt = client.prepare(sql)
     const databaseDelCount = await stmt.get()
+
+    // latest seq
+    sql = tableutils.prepareTableLatestSeqSQL(databaseName)
+    stmt = client.prepare(sql)
+    const databaseLatestSeq = await stmt.get()
+
+    // output object
     const obj = {
+      update_seq: databaseLatestSeq.seq || '0',
+      sizes: {
+        file: 0,
+        external: 0,
+        active: 0
+      },
+      props: {},
+      disk_format_version: 8,
+      compact_running: false,
+      cluster: {
+        q: 1,
+        n: 1,
+        w: 1,
+        r: 1
+      },
       db_name: databaseName,
       instance_start_time: '0',
       doc_count: databaseCount.c,
@@ -430,7 +547,7 @@ app.get('/', (req, res) => {
 
 // backstop route
 app.use(function (req, res) {
-  res.status(404).send({ error: 'missing' })
+  res.status(404).send({ error: 'not_found', reason: 'missing' })
 })
 
 const main = () => {
