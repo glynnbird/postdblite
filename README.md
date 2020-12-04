@@ -101,6 +101,14 @@ $ curl -X GET 'http://localhost:5984/mydb/_all_docs?startkey="b"&endkey="d"'
 {"rows":[{"id":"b","key":"b","value":{"rev":"0-1"}},{"id":"c","key":"c","value":{"rev":"0-1"}},{"id":"d","key":"d","value":{"rev":"0-1"}}]}
 ```
 
+Use `descending` to reverse the order:
+
+```sh
+$ curl -X GET 'http://localhost:5984/mydb/_all_docs?descending=true'
+```
+
+> Note: when using `descending` with `startkey` & `endkey`, you don't need to swap `startkey` & `endkey` like you do with CouchDB.
+
 Parameters:
 
 - `startkey`/`endkey` - one or both supplied, for range queries.
