@@ -351,6 +351,12 @@ app.get('/:db/:id', async (req, res) => {
       throw (new Error('missing document'))
     }
     const doc = docutils.processResultDoc(data)
+    if (req.query.revs) {
+      doc._revisions = {
+        start: 1,
+        ids: [fixrev]
+      }
+    }
     res.send(doc)
   } catch (e) {
     sendError(res, 404, 'Document not found ' + id)
@@ -554,7 +560,13 @@ app.use(function (req, res) {
 })
 
 const main = () => {
-  app.listen(defaults.port, () => console.log(`${pkg.name} API service listening on port ${defaults.port}!`))
+  app.listen(defaults.port, (err) => {
+    if (err) {
+      console.error(err)
+    } else {
+      console.log(`${pkg.name} API service listening on port ${defaults.port}!`)
+    }
+  })
 }
 
 main()
