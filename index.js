@@ -257,14 +257,14 @@ app.get('/:db/_changes', async (req, res) => {
 app.get('/:db/_all_docs', async (req, res) => {
   const databaseName = req.params.db
   const includeDocs = req.query.include_docs === 'true'
-  let startkey, endkey, limit, offset, descending
+  const descending = req.query.descending === 'true'
+  let startkey, endkey, limit, offset
 
   try {
     startkey = req.query.startkey ? JSON.parse(req.query.startkey) : '\u0000'
     endkey = req.query.endkey ? JSON.parse(req.query.endkey) : '\uffff'
     limit = req.query.limit ? JSON.parse(req.query.limit) : 100
     offset = req.query.offset ? JSON.parse(req.query.offset) : 0
-    descending = typeof req.query.descending === 'string' ? (req.query.descending === 'true') : false
   } catch (e) {
     return sendError(res, 400, 'Invalid startkey/endkey/limit/offset parameters')
   }
