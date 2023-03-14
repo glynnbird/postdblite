@@ -1,56 +1,26 @@
 // modules and libraries
-const app = require('fastify')({ logger: true })
+const defaults = require('./lib/defaults.js')
+const app = require('fastify')({ logger: defaults.logging })
 const utils = require('./lib/utils.js')
 const docutils = require('./lib/docutils.js')
 const tableutils = require('./lib/tableutils.js')
 const queryutils = require('./lib/queryutils.js')
 const pkg = require('./package.json')
 const debug = require('debug')(pkg.name)
-// const app = express()
-// const basicAuth = require('express-basic-auth')
 const kuuid = require('kuuid')
-// const morgan = require('morgan')
 let counter = 1
 
 // fixed rev value - no MVCC here
 const fixrev = '0-1'
 
-// incoming environment variables vs defaults
-const defaults = require('./lib/defaults.js')
-
-// pretty print
-// app.set('json spaces', 2)
-// app.set('x-powered-by', false)
-
-// JSON parsing middleware
-// const bodyParser = require('body-parser')
-// app.use(bodyParser.json({ limit: '10mb' }))
-
-// compression middleware
-// const compression = require('compression')
-// app.use(compression())
-
-// Logging middleware
-/* if (defaults.logging !== 'none') {
-  app.use(morgan(defaults.logging))
-} */
-
 // AUTH middleware
 const authenticate = { realm: 'postdblite' }
 app.register(require('@fastify/basic-auth'), { validate, authenticate })
 async function validate (username, password, req, reply) {
-  console.log(username, defaults.username, password, defaults.password)
   if (username !== defaults.username || password !== defaults.password) {
     return new Error('Invalid username or passeword')
   }
 }
-
-
-// readonly middleware
-// const readOnlyMiddleware = require('./lib/readonly.js')(defaults.readonly)
-// if (defaults.readonly) {
-//   console.log('NOTE: readonly mode')
-// }
 
 // DB Client
 const Database = require('better-sqlite3')
@@ -562,13 +532,7 @@ app.after(() => {
     }
     reply.send(obj)
   })
-
 })
-
-// backstop route
-// app.use(function (req, res) {
-//   res.status(404).send({ error: 'not_found', reason: 'missing' })
-// })
 
 const main = async () => {
   try {
