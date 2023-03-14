@@ -24,6 +24,7 @@
   },
   "homepage": "https://github.com/glynnbird/postdblite#readme",
   "dependencies": {
+    "@fastify/basic-auth": "^5.0.0",
     "better-sqlite3": "^8.2.0",
     "debug": "^4.3.4",
     "fastify": "^4.14.1",
