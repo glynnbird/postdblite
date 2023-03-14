@@ -10,7 +10,7 @@
 
 It does not implement CouchDB's MVCC, Design Documents, attachments, MapReduce, "Mango" search or any other CouchDB feature.
 
-It does however provide a "consistent" data store where the documents and secondary indexes are in lock-step. Documents are limited to 100KB in size.
+It does however provide a "consistent" data store (as opposed to _eventually consistent_). Documents are limited to 100KB in size.
 
 ## Running locally
 
@@ -36,7 +36,7 @@ $ curl -X PUT http://localhost:5984/mydb
 
 ```sh
 $ curl -X GET http://localhost:5984/mydb
-{"db_name":"mydb","instance_start_time":"0","doc_count":"0","sizes":{"file":"40960","active":"0"}
+{"db_name":"mydb","instance_start_time":"0","doc_count":"0","sizes":{"file":"40960","active":"0"}}
 ```
 
 ### Add a document (known ID) - PUT /db/id
@@ -63,7 +63,7 @@ $ curl -X POST \
 
 ```sh
 $ curl -X GET http://localhost:5984/mydb/a
-{"x":1,"y":false,"z":"aardvark","_id":"a","_rev":"0-1","_i1":"","_i2":"","_i3":""}
+{"x":1,"y":false,"z":"aardvark","_id":"a","_rev":"0-1"}
 ```
 
 ### Get all documents - GET /db/_all_docs
@@ -77,7 +77,7 @@ Add `include_docs=true` to include document bodies:
 
 ```sh
 $ curl -X GET http://localhost:5984/mydb/_all_docs?include_docs=true
-{"rows":[{"id":"a","key":"a","value":{"rev":"0-1"},"doc":{"x":1,"y":false,"z":"aardvark","_id":"a","_rev":"0-1","_i1":"","_i2":"","_i3":""}},{"id":"001hla5z2pEedb3wB5rI2Rkd0k2pzUQg","key":"001hla5z2pEedb3wB5rI2Rkd0k2pzUQg","value":{"rev":"0-1"},"doc":{"x":2,"y":true,"z":"bear","_id":"001hla5z2pEedb3wB5rI2Rkd0k2pzUQg","_rev":"0-1","_i1":"","_i2":"","_i3":""}},{"id":"b","key":"b","value":{"rev":"0-1"},"doc":{"x":1,"y":false,"z":"bat","_id":"b","_rev":"0-1","_i1":"","_i2":"","_i3":""}},{"id":"c","key":"c","value":{"rev":"0-1"},"doc":{"x":1,"y":false,"z":"cat","_id":"c","_rev":"0-1","_i1":"","_i2":"","_i3":""}},{"id":"d","key":"d","value":{"rev":"0-1"},"doc":{"x":1,"y":false,"z":"dog","_id":"d","_rev":"0-1","_i1":"","_i2":"","_i3":""}},{"id":"e","key":"e","value":{"rev":"0-1"},"doc":{"x":1,"y":false,"z":"eagle","_id":"e","_rev":"0-1","_i1":"","_i2":"","_i3":""}},{"id":"f","key":"f","value":{"rev":"0-1"},"doc":{"x":1,"y":false,"z":"fox","_id":"f","_rev":"0-1","_i1":"","_i2":"","_i3":""}}]}
+{"rows":[{"id":"a","key":"a","value":{"rev":"0-1"},"doc":{"x":1,"y":false,"z":"aardvark","_id":"a","_rev":"0-1"}}, ...]}
 ```
 
 Add a `limit` parameter to reduce number of rows returned:
@@ -197,4 +197,4 @@ PostDB is a simple Express Node.js app that talks to a SQLite database. Each Pos
 - `id` - the document's unique identifier. Becomes the document's `_id` field.
 - `json` - the document's body except the `_id` and `_rev` fields.
 - `seq` - the sequence number. Each insert, update or delete to the database will set `seq` to a value greater than other values of `seq` in the database.
-- `deleted` - when a document is deleted, the row remains but the `deleted` flag is set, the `seq` is updated, the `json` field is wiped out and the index fields are cleared.
+- `deleted` - when a document is deleted, the row remains but the `deleted` flag is set, the `seq` is updated and the `json` field is wiped out.
