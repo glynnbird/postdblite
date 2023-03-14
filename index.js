@@ -1,15 +1,15 @@
 // modules and libraries
-const express = require('express')
+const app = require('fastify')({ logger: true })
 const utils = require('./lib/utils.js')
 const docutils = require('./lib/docutils.js')
 const tableutils = require('./lib/tableutils.js')
 const queryutils = require('./lib/queryutils.js')
 const pkg = require('./package.json')
 const debug = require('debug')(pkg.name)
-const app = express()
-const basicAuth = require('express-basic-auth')
+// const app = express()
+// const basicAuth = require('express-basic-auth')
 const kuuid = require('kuuid')
-const morgan = require('morgan')
+// const morgan = require('morgan')
 let counter = 1
 
 // fixed rev value - no MVCC here
@@ -20,46 +20,46 @@ const defaults = require('./lib/defaults.js')
 
 // pretty print
 // app.set('json spaces', 2)
-app.set('x-powered-by', false)
+// app.set('x-powered-by', false)
 
 // JSON parsing middleware
-const bodyParser = require('body-parser')
-app.use(bodyParser.json({ limit: '10mb' }))
+// const bodyParser = require('body-parser')
+// app.use(bodyParser.json({ limit: '10mb' }))
 
 // compression middleware
-const compression = require('compression')
-app.use(compression())
+// const compression = require('compression')
+// app.use(compression())
 
 // Logging middleware
-if (defaults.logging !== 'none') {
+/* if (defaults.logging !== 'none') {
   app.use(morgan(defaults.logging))
-}
+} */
 
 // AUTH middleware
-if (defaults.username && defaults.password) {
+/* if (defaults.username && defaults.password) {
   console.log('NOTE: authentication mode')
   const obj = {}
   obj[defaults.username] = defaults.password
   app.use(basicAuth({ users: obj }))
-}
+} */
 
 // readonly middleware
-const readOnlyMiddleware = require('./lib/readonly.js')(defaults.readonly)
-if (defaults.readonly) {
-  console.log('NOTE: readonly mode')
-}
+// const readOnlyMiddleware = require('./lib/readonly.js')(defaults.readonly)
+// if (defaults.readonly) {
+//   console.log('NOTE: readonly mode')
+// }
 
 // DB Client
 const Database = require('better-sqlite3')
 const client = new Database('post.db', { verbose: debug })
 
 // send error
-const sendError = (res, statusCode, str) => {
+const sendError = (reply, statusCode, str) => {
   let error = 'error'
   switch (statusCode) {
     case 404: error = 'not_found'; str = 'missing'; break
   }
-  res.status(statusCode).send({ error: error, reason: str })
+  reply.status(statusCode).send({ error, reason: str })
 }
 
 // write a document to the database
@@ -68,21 +68,21 @@ const writeDoc = async (databaseName, id, doc) => {
   const sql = docutils.prepareInsertSQL(databaseName)
   debug(sql, id, doc)
   const stmt = client.prepare(sql)
-  return stmt.run({ json: JSON.stringify(doc), id: id, seq: kuuid.prefixms() + counter++ })
+  return stmt.run({ json: JSON.stringify(doc), id, seq: kuuid.prefixms() + counter++ })
 }
 
 // POST /_session
 // session endpoint
-app.post('/_session', async (req, res) => {
-  res.send({ ok: true, name: 'admin', roles: ['admin'] })
+app.post('/_session', async (req, reply) => {
+  reply.send({ ok: true, name: 'admin', roles: ['admin'] })
 })
 
 // POST /db/_revs_diff
 // checks if we have doc revisions
-app.post('/:db/_revs_diff', async (req, res) => {
+app.post('/:db/_revs_diff', async (req, reply) => {
   const databaseName = req.params.db
   if (!utils.validDatabaseName(databaseName)) {
-    return sendError(res, 400, 'Invalid database name')
+    return sendError(reply, 400, 'Invalid database name')
   }
 
   // simulate response asking for only the most recent revision
@@ -95,15 +95,15 @@ app.post('/:db/_revs_diff', async (req, res) => {
   }
 
   // send response
-  res.status(200).send(response)
+  reply.send(response)
 })
 
 // POST /db/_ensure_full_commit
 // checks if we have doc revisions
-app.post('/:db/_ensure_full_commit', async (req, res) => {
+app.post('/:db/_ensure_full_commit', async (req, reply) => {
   const databaseName = req.params.db
   if (!utils.validDatabaseName(databaseName)) {
-    return sendError(res, 400, 'Invalid database name')
+    return sendError(reply, 400, 'Invalid database name')
   }
 
   // simulate response asking for only the most recent revision
@@ -113,21 +113,21 @@ app.post('/:db/_ensure_full_commit', async (req, res) => {
   }
 
   // send response
-  res.status(201).send(response)
+  reply.status(201).send(response)
 })
 
 // POST /db/_bulk_docs
 // bulk add/update/delete several documents
-app.post('/:db/_bulk_docs', async (req, res) => {
+app.post('/:db/_bulk_docs', async (req, reply) => {
   const databaseName = req.params.db
   if (!utils.validDatabaseName(databaseName)) {
-    return sendError(res, 400, 'Invalid database name')
+    return sendError(reply, 400, 'Invalid database name')
   }
 
   // docs parameter
   const docs = req.body.docs
   if (!docs || !Array.isArray(req.body.docs) || docs.length === 0) {
-    return sendError(res, 400, 'Invalid docs parameter')
+    return sendError(reply, 400, 'Invalid docs parameter')
   }
 
   // start transaction
@@ -146,21 +146,21 @@ app.post('/:db/_bulk_docs', async (req, res) => {
       delete doc._id
       delete doc._rev
       if (doc._deleted) {
-        deleteStmt.run({ id: id, seq: kuuid.prefixms() + counter++ })
+        deleteStmt.run({ id, seq: kuuid.prefixms() + counter++ })
       } else {
-        insertStmt.run({ json: JSON.stringify(doc), id: id, seq: kuuid.prefixms() + counter++ })
+        insertStmt.run({ json: JSON.stringify(doc), id, seq: kuuid.prefixms() + counter++ })
       }
     }
   })
   await bulker(docs)
 
   // end transaction
-  res.status(201).send(response)
+  reply.status(201).send(response)
 })
 
 // GET /db/_all_dbs
 // get a list of databases (tables)
-app.get('/_all_dbs', async (req, res) => {
+app.get('/_all_dbs', async (req, reply) => {
   try {
     const sql = tableutils.prepareTableListSQL()
     const stmt = client.prepare(sql)
@@ -171,19 +171,19 @@ app.get('/_all_dbs', async (req, res) => {
       const row = data[i]
       databases.push(row.name)
     }
-    res.send(databases.sort())
+    reply.send(databases.sort())
   } catch (e) {
     debug(e)
-    sendError(res, 404, 'Could not retrieve databases')
+    sendError(reply, 404, 'Could not retrieve databases')
   }
 })
 
 // GET /db/_all_dbs
 // get a list of unique ids
-app.get('/_uuids', (req, res) => {
+app.get('/_uuids', (req, reply) => {
   const count = req.query.count ? JSON.parse(req.query.count) : 1
   if (count < 1 || count > 100) {
-    return sendError(res, 400, 'invalid count parameter')
+    return sendError(reply, 400, 'invalid count parameter')
   }
   const obj = {
     uuids: []
@@ -191,15 +191,15 @@ app.get('/_uuids', (req, res) => {
   for (let i = 0; i < count; i++) {
     obj.uuids.push(kuuid.id())
   }
-  res.send(obj)
+  reply.send(obj)
 })
 
 // GET /db/changes
 // get a list of changes
-app.get('/:db/_changes', async (req, res) => {
+app.get('/:db/_changes', async (req, reply) => {
   const databaseName = req.params.db
   if (!utils.validDatabaseName(databaseName)) {
-    return sendError(res, 400, 'Invalid database name')
+    return sendError(reply, 400, 'Invalid database name')
   }
 
   // parameter munging
@@ -209,10 +209,10 @@ app.get('/:db/_changes', async (req, res) => {
   try {
     limit = req.query.limit ? Number.parseInt(req.query.limit) : 100
   } catch (e) {
-    return sendError(res, 400, 'Invalid limit parameter')
+    return sendError(reply, 400, 'Invalid limit parameter')
   }
   if (limit && (typeof limit !== 'number' || limit < 1)) {
-    return sendError(res, 400, 'Invalid limit parameter')
+    return sendError(reply, 400, 'Invalid limit parameter')
   }
 
   // do query
@@ -245,16 +245,16 @@ app.get('/:db/_changes', async (req, res) => {
       obj.results.push(thisobj)
     }
     obj.last_seq = lastSeq
-    res.send(obj)
+    reply.send(obj)
   } catch (e) {
     debug(e)
-    sendError(res, 500, 'Could not fetch changes feed')
+    sendError(reply, 500, 'Could not fetch changes feed')
   }
 })
 
 // GET /db/_all_docs
 // get all documents
-app.get('/:db/_all_docs', async (req, res) => {
+app.get('/:db/_all_docs', async (req, reply) => {
   const databaseName = req.params.db
   const includeDocs = req.query.include_docs === 'true'
   const descending = req.query.descending === 'true'
@@ -266,17 +266,17 @@ app.get('/:db/_all_docs', async (req, res) => {
     limit = req.query.limit ? JSON.parse(req.query.limit) : 100
     offset = req.query.offset ? JSON.parse(req.query.offset) : 0
   } catch (e) {
-    return sendError(res, 400, 'Invalid startkey/endkey/limit/offset parameters')
+    return sendError(reply, 400, 'Invalid startkey/endkey/limit/offset parameters')
   }
 
   // check limit parameter
   if (limit && (typeof limit !== 'number' || limit < 1)) {
-    return sendError(res, 400, 'Invalid limit parameter')
+    return sendError(reply, 400, 'Invalid limit parameter')
   }
 
   // offset parameter
   if (offset && (typeof offset !== 'number' || offset < 0)) {
-    return sendError(res, 400, 'Invalid offset parameter')
+    return sendError(reply, 400, 'Invalid offset parameter')
   }
 
   // const offset = 0
@@ -284,7 +284,7 @@ app.get('/:db/_all_docs', async (req, res) => {
   try {
     debug(sql.sql, sql.values)
     const stmt = client.prepare(sql)
-    const data = await stmt.all({ startkey: startkey, endkey: endkey, limit: limit, offset: offset })
+    const data = await stmt.all({ startkey, endkey, limit, offset })
     const obj = {
       rows: []
     }
@@ -299,22 +299,22 @@ app.get('/:db/_all_docs', async (req, res) => {
       }
       obj.rows.push(thisobj)
     }
-    res.send(obj)
+    reply.send(obj)
   } catch (e) {
-    sendError(res, 404, 'Could not retrieve documents')
+    sendError(reply, 404, 'Could not retrieve documents')
   }
 })
 
 // GET /db/_local/doc
 // get a doc with a known id
-app.get('/:db/_local/:id', async (req, res) => {
+app.get('/:db/_local/:id', async (req, reply) => {
   const databaseName = req.params.db
   if (!utils.validDatabaseName(databaseName)) {
-    return sendError(res, 400, 'Invalid database name')
+    return sendError(reply, 400, 'Invalid database name')
   }
   let id = req.params.id
   if (!utils.validID(id)) {
-    return sendError(res, 400, 'Invalid id')
+    return sendError(reply, 400, 'Invalid id')
   }
   id = '_local/' + id
   try {
@@ -326,22 +326,22 @@ app.get('/:db/_local/:id', async (req, res) => {
       throw (new Error('missing document'))
     }
     const doc = docutils.processResultDoc(data)
-    res.send(doc)
+    reply.send(doc)
   } catch (e) {
-    sendError(res, 404, 'Document not found ' + id)
+    sendError(reply, 404, 'Document not found ' + id)
   }
 })
 
 // GET /db/doc
 // get a doc with a known id
-app.get('/:db/:id', async (req, res) => {
+app.get('/:db/:id', async (req, reply) => {
   const databaseName = req.params.db
   if (!utils.validDatabaseName(databaseName)) {
-    return sendError(res, 400, 'Invalid database name')
+    return sendError(reply, 400, 'Invalid database name')
   }
   const id = req.params.id
   if (!utils.validID(id)) {
-    return sendError(res, 400, 'Invalid id')
+    return sendError(reply, 400, 'Invalid id')
   }
   try {
     const sql = docutils.prepareGetSQL(databaseName)
@@ -358,144 +358,144 @@ app.get('/:db/:id', async (req, res) => {
         ids: [fixrev]
       }
     }
-    res.send(doc)
+    reply.send(doc)
   } catch (e) {
-    sendError(res, 404, 'Document not found ' + id)
+    sendError(reply, 404, 'Document not found ' + id)
   }
 })
 
 // PUT /db/_local/doc
 // add a doc with a known id
-app.put('/:db/_local/:id', readOnlyMiddleware, async (req, res) => {
+app.put('/:db/_local/:id', async (req, reply) => {
   const databaseName = req.params.db
   if (!utils.validDatabaseName(databaseName)) {
-    return sendError(res, 400, 'Invalid database name')
+    return sendError(reply, 400, 'Invalid database name')
   }
   let id = req.params.id
   if (!utils.validID(id)) {
-    return sendError(res, 400, 'Invalid id')
+    return sendError(reply, 400, 'Invalid id')
   }
   id = '_local/' + id
   const doc = req.body
   if (!doc || typeof doc !== 'object') {
-    return sendError(res, 400, 'Invalid JSON')
+    return sendError(reply, 400, 'Invalid JSON')
   }
   try {
     await writeDoc(databaseName, id, doc)
-    res.status(201).send({ ok: true, id: id, rev: fixrev })
+    reply.status(201).send({ ok: true, id, rev: fixrev })
   } catch (e) {
     debug(e)
-    sendError(res, 404, 'Could not write document ' + id)
+    sendError(reply, 404, 'Could not write document ' + id)
   }
 })
 
 // PUT /db/doc
 // add a doc with a known id
-app.put('/:db/:id', readOnlyMiddleware, async (req, res) => {
+app.put('/:db/:id', async (req, reply) => {
   const databaseName = req.params.db
   if (!utils.validDatabaseName(databaseName)) {
-    return sendError(res, 400, 'Invalid database name')
+    return sendError(reply, 400, 'Invalid database name')
   }
   const id = req.params.id
   if (!utils.validID(id)) {
-    return sendError(res, 400, 'Invalid id')
+    return sendError(reply, 400, 'Invalid id')
   }
   const doc = req.body
   if (!doc || typeof doc !== 'object') {
-    return sendError(res, 400, 'Invalid JSON')
+    return sendError(reply, 400, 'Invalid JSON')
   }
   try {
     await writeDoc(databaseName, id, doc)
-    res.status(201).send({ ok: true, id: id, rev: fixrev })
+    reply.status(201).send({ ok: true, id, rev: fixrev })
   } catch (e) {
     debug(e)
-    sendError(res, 404, 'Could not write document ' + id)
+    sendError(reply, 404, 'Could not write document ' + id)
   }
 })
 
 // DELETE /db/doc
 // delete a doc with a known id
-app.delete('/:db/:id', readOnlyMiddleware, async (req, res) => {
+app.delete('/:db/:id', async (req, reply) => {
   const databaseName = req.params.db
   if (!utils.validDatabaseName(databaseName)) {
-    return sendError(res, 400, 'Invalid database name')
+    return sendError(reply, 400, 'Invalid database name')
   }
   const id = req.params.id
   if (!utils.validID(id)) {
-    return sendError(res, 400, 'Invalid id')
+    return sendError(reply, 400, 'Invalid id')
   }
   try {
     const sql = docutils.prepareDeleteSQL(databaseName)
     const stmt = client.prepare(sql)
     debug(sql, id)
-    await stmt.run({ id: id, seq: kuuid.prefixms() + counter++ })
-    res.send({ ok: true, id: id, rev: fixrev })
+    await stmt.run({ id, seq: kuuid.prefixms() + counter++ })
+    reply.send({ ok: true, id, rev: fixrev })
   } catch (e) {
     debug(e)
-    sendError(res, 404, 'Could not delete document ' + databaseName + '/' + id)
+    sendError(reply, 404, 'Could not delete document ' + databaseName + '/' + id)
   }
 })
 
 // POST /db
 // add a doc without an id
-app.post('/:db', readOnlyMiddleware, async (req, res) => {
+app.post('/:db', async (req, reply) => {
   const databaseName = req.params.db
   if (!utils.validDatabaseName(databaseName)) {
-    return sendError(res, 400, 'Invalid database name')
+    return sendError(reply, 400, 'Invalid database name')
   }
   const id = kuuid.id()
   const doc = req.body
   try {
     await writeDoc(databaseName, id, doc)
-    res.status(201).send({ ok: true, id: id, rev: fixrev })
+    reply.status(201).send({ ok: true, id, rev: fixrev })
   } catch (e) {
     debug(e)
-    sendError(res, 400, 'Could not save document')
+    sendError(reply, 400, 'Could not save document')
   }
 })
 
 // PUT /db
 // create a database
-app.put('/:db', readOnlyMiddleware, async (req, res) => {
+app.put('/:db', async (req, reply) => {
   const databaseName = req.params.db
   if (!utils.validDatabaseName(databaseName)) {
-    return sendError(res, 400, 'Invalid database name')
+    return sendError(reply, 400, 'Invalid database name')
   }
   debug('Creating database - ' + databaseName)
   try {
     const sql = tableutils.prepareCreateTableSQL(databaseName)
     await client.exec(sql)
-    res.status(201).send({ ok: true })
+    reply.status(201).send({ ok: true })
   } catch (e) {
-    sendError(res, 400, 'Could not create database' + databaseName)
+    sendError(reply, 400, 'Could not create database' + databaseName)
   }
 })
 
 // DELETE /db
 // delete a database (table)
-app.delete('/:db', readOnlyMiddleware, async (req, res) => {
+app.delete('/:db', async (req, reply) => {
   const databaseName = req.params.db
   if (!utils.validDatabaseName(databaseName)) {
-    return sendError(res, 400, 'Invalid database name')
+    return sendError(reply, 400, 'Invalid database name')
   }
   debug('Delete database - ' + databaseName)
   try {
     const sql = tableutils.prepareDropTableSQL(databaseName)
     debug(sql)
     await client.exec(sql)
-    res.send({ ok: true })
+    reply.send({ ok: true })
   } catch (e) {
     debug(e)
-    sendError(res, 404, 'Could not drop database ' + databaseName)
+    sendError(reply, 404, 'Could not drop database ' + databaseName)
   }
 })
 
 // GET /db
 // get info on database (table)
-app.get('/:db', async (req, res) => {
+app.get('/:db', async (req, reply) => {
   const databaseName = req.params.db
   if (!utils.validDatabaseName(databaseName)) {
-    return sendError(res, 400, 'Invalid database name')
+    return sendError(reply, 400, 'Invalid database name')
   }
   debug('Get database info - ' + databaseName)
   try {
@@ -536,38 +536,37 @@ app.get('/:db', async (req, res) => {
       doc_count: databaseCount.c,
       doc_del_count: databaseDelCount.c
     }
-    res.send(obj)
+    reply.send(obj)
   } catch (e) {
     debug('error', e)
-    sendError(res, 404, 'Could not get database info for ' + databaseName)
+    sendError(reply, 404, 'Could not get database info for ' + databaseName)
   }
 })
 
 // GET /
 // return server information
-app.get('/', (req, res) => {
+app.get('/', (req, reply) => {
   const obj = {
     postDB: 'Welcome',
     pkg: pkg.name,
     node: process.version,
     version: pkg.version
   }
-  res.send(obj)
+  reply.send(obj)
 })
 
 // backstop route
-app.use(function (req, res) {
-  res.status(404).send({ error: 'not_found', reason: 'missing' })
-})
+// app.use(function (req, res) {
+//   res.status(404).send({ error: 'not_found', reason: 'missing' })
+// })
 
-const main = () => {
-  app.listen(defaults.port, (err) => {
-    if (err) {
-      console.error(err)
-    } else {
-      console.log(`${pkg.name} API service listening on port ${defaults.port}!`)
-    }
-  })
+const main = async () => {
+  try {
+    await app.listen({ port: defaults.port })
+  } catch (err) {
+    app.log.error(err)
+    process.exit(1)
+  }
 }
 
 main()
