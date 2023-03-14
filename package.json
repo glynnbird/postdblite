@@ -1,6 +1,6 @@
 {
   "name": "postdblite",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "A CouchDB-like interface on top of SQLite",
   "main": "index.js",
   "scripts": {
@@ -24,18 +24,18 @@
   },
   "homepage": "https://github.com/glynnbird/postdblite#readme",
   "dependencies": {
-    "better-sqlite3": "^7.1.1",
-    "body-parser": "^1.19.0",
+    "better-sqlite3": "^8.2.0",
+    "body-parser": "^1.20.2",
     "compression": "^1.7.4",
-    "debug": "^4.3.1",
-    "express": "^4.17.1",
-    "express-basic-auth": "^1.2.0",
-    "kuuid": "^0.6.0",
+    "debug": "^4.3.4",
+    "express": "^4.18.2",
+    "express-basic-auth": "^1.2.1",
+    "kuuid": "^1.0.1",
     "morgan": "^1.10.0",
-    "nano": "^9.0.1"
+    "nano": "^10.1.2"
   },
   "devDependencies": {
-    "standard": "^16.0.3"
+    "standard": "^17.0.0"
   },
   "bin": {
     "postdb": "bin/postdb_api.bin.js"
